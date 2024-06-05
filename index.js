@@ -59,7 +59,32 @@ async function run() {
 
 
         app.get('/all-donation-request', async (req, res) => {
+            const status = req.query.status
+            if (status !== "all") {
+                console.log(status);
+                const query = { donation_status: status }
+                const result = await donationRequestCollection.find(query).toArray()
+                return res.send(result)
+            }
+
             const result = await donationRequestCollection.find().toArray()
+            res.send(result)
+        })
+
+        app.get('/my-donation-request/:email', async (req, res) => {
+            const email = req.params.email
+            const status = req.query.status
+            if (status !== "all") {
+                console.log(status);
+                const query = {
+                    donation_status: status,
+                    requester_email: email
+                }
+                const result = await donationRequestCollection.find(query).toArray()
+                return res.send(result)
+            }
+            const query = { requester_email: email }
+            const result = await donationRequestCollection.find(query).toArray()
             res.send(result)
         })
 
