@@ -140,6 +140,24 @@ async function run() {
             res.send({ admin })
         })
 
+        app.get('/users/volunteer/:email', verifyToken, async (req, res) => {
+            const email = req.params.email
+
+            if (email !== req?.decoded?.email) {
+                return res
+                    .status(403)
+                    .send({ message: "forbidden access" })
+            }
+            const query = { email: email }
+            const user = await userCollection.findOne(query)
+
+            let volunteer = false
+            if (user) {
+                volunteer = user?.role === 'volunteer'
+            }
+            res.send({ volunteer })
+        })
+
 
         app.post('/users', async (req, res) => {
             const userInfo = req.body
@@ -152,6 +170,12 @@ async function run() {
 
 
         // donationRequest related api
+
+        app.get("/recent-donation-request", async (req, res) => {
+            const result = await donationRequestCollection.find().sort({ timeStamp: -1 }).toArray()
+            
+            res.send(result)
+        })
 
 
         app.get('/all-donation-request', async (req, res) => {
