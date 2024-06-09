@@ -12,6 +12,7 @@ app.use(
     cors({
         origin: [
             "http://localhost:5173",
+            "https://one-blood.netlify.app"
         ],
         credentials: true,
     })
@@ -42,6 +43,7 @@ async function run() {
 
         const userCollection = client.db("oneBloodDB").collection("users");
         const donationRequestCollection = client.db("oneBloodDB").collection("donationRequest");
+        const blogCollection = client.db("oneBloodDB").collection("blogs");
 
 
         // oun middleWare
@@ -79,6 +81,21 @@ async function run() {
         }
 
 
+        // use verify admin or Volunteer after verify token
+        const verifyAdminOrVolunteer = async (req, res, next) => {
+            const email = req.decoded.email
+            console.log(email);
+            const query = { email: email }
+            const user = await userCollection.findOne(query);
+            const isAdmin = user?.role === 'admin'
+            const isVolunteer = user?.role === 'volunteer';
+            if (!isAdmin && !isVolunteer) {
+                return res.status(403).send({ message: "forbidden access" })
+            }
+            next()
+        }
+
+
         // jwt related api 
         app.post('/jwt', async (req, res) => {
             const user = req.body;
@@ -87,13 +104,74 @@ async function run() {
         })
 
 
+        // blogCollection
 
-        // user related api
+        // update blog status 
+        app.patch('/update-blog-status/:id', async (req, res) => {
+            const id = req.params.id
+            const newStatus = req.body.status
+            console.log(newStatus);
+            const filter = { _id: new ObjectId(id) }
+            const updateDoc = {
+                $set: {
+                    status: newStatus
+                },
+            };
+            const result = await blogCollection.updateOne(filter, updateDoc)
+            res.send(result)
+        })
+
+        // create blog
+        app.post('/add-blog', async (req, res) => {
+            const blog = req.body
+            const result = await blogCollection.insertOne(blog)
+            res.send(result)
+        })
+
+        // delete blog
+        app.delete('/delete-blog/:id', async (req, res) => {
+            const id = req.params.id
+            const filter = { _id: new ObjectId(id) }
+
+            const result = await blogCollection.deleteOne(filter)
+            res.send(result)
+
+        })
+
+
+        // get all blogs
+        app.get('/all-blogs', async (req, res) => {
+            const status = req.query.status
+            // console.log("key", status);
+            if (status !== "all") {
+
+                console.log(status);
+                const query = { status: status }
+                const result = await blogCollection.find(query).toArray()
+                return res.send(result)
+            }
+
+            const result = await blogCollection.find().toArray()
+            res.send(result)
+        })
+
+        // user Collection
+
+        // get all users only admin
         app.get('/all-users', verifyToken, verifyAdmin, async (req, res) => {
+            const status = req.query.status
+            if (status !== "all") {
+                // console.log(status);
+                const query = { status: status }
+                const result = await userCollection.find(query).toArray()
+                return res.send(result)
+            }
+
             const result = await userCollection.find().toArray()
             res.send(result)
         })
 
+        // update userStatus only admin
         app.patch('/update-user-status/:id', async (req, res) => {
             const id = req.params.id
             const newStatus = req.body.status
@@ -108,6 +186,7 @@ async function run() {
             res.send(result)
         })
 
+        // update user role only admin
         app.patch('/update-user-role/:id', async (req, res) => {
             const id = req.params.id
             const newRole = req.body.role
@@ -122,14 +201,15 @@ async function run() {
             res.send(result)
         })
 
-        app.get('/users/admin/:email', verifyToken, async (req, res) => {
+        // get isAdmin user
+        app.get('/users/admin/:email', async (req, res) => {
             const email = req.params.email
 
-            if (email !== req?.decoded?.email) {
-                return res
-                    .status(403)
-                    .send({ message: "forbidden access" })
-            }
+            // if (email !== req?.decoded?.email) {
+            //     return res
+            //         .status(403)
+            //         .send({ message: "forbidden access" })
+            // }
             const query = { email: email }
             const user = await userCollection.findOne(query)
 
@@ -140,14 +220,15 @@ async function run() {
             res.send({ admin })
         })
 
-        app.get('/users/volunteer/:email', verifyToken, async (req, res) => {
+        // get isVolunteer user
+        app.get('/users/volunteer/:email', async (req, res) => {
             const email = req.params.email
 
-            if (email !== req?.decoded?.email) {
-                return res
-                    .status(403)
-                    .send({ message: "forbidden access" })
-            }
+            // if (email !== req?.decoded?.email) {
+            //     return res
+            //         .status(403)
+            //         .send({ message: "forbidden access" })
+            // }
             const query = { email: email }
             const user = await userCollection.findOne(query)
 
@@ -158,7 +239,7 @@ async function run() {
             res.send({ volunteer })
         })
 
-
+        // create user public
         app.post('/users', async (req, res) => {
             const userInfo = req.body
             console.log(userInfo);
@@ -167,18 +248,21 @@ async function run() {
         })
 
 
+        // donationRequestCollection
 
+        // get recent request {user}
+        app.get("/recent-donation-request/:email", verifyToken, async (req, res) => {
+            const email = req.params.email
+            const query = {
+                requester_email: email
+            }
+            const result = await donationRequestCollection.find(query).sort({ timeStamp: -1 }).toArray()
 
-        // donationRequest related api
-
-        app.get("/recent-donation-request", async (req, res) => {
-            const result = await donationRequestCollection.find().sort({ timeStamp: -1 }).toArray()
-            
             res.send(result)
         })
 
-
-        app.get('/all-donation-request', async (req, res) => {
+        // get all donation request admin or volunteer
+        app.get('/all-donation-request', verifyToken, verifyAdminOrVolunteer, async (req, res) => {
             const status = req.query.status
             if (status !== "all") {
                 console.log(status);
@@ -191,7 +275,8 @@ async function run() {
             res.send(result)
         })
 
-        app.get('/my-donation-request/:email', async (req, res) => {
+        // get my donation  all role 
+        app.get('/my-donation-request/:email', verifyToken, async (req, res) => {
             const email = req.params.email
             const status = req.query.status
             if (status !== "all") {
@@ -208,7 +293,7 @@ async function run() {
             res.send(result)
         })
 
-
+        // get donation request public
         app.get('/donation-request', async (req, res) => {
             const query = {
                 donation_status: 'pending'
@@ -216,6 +301,8 @@ async function run() {
             const result = await donationRequestCollection.find(query).toArray()
             res.send(result)
         })
+
+        //  get single donation request user
         app.get('/donation-request/:id', async (req, res) => {
             const id = req.params.id
             const query = {
@@ -226,6 +313,7 @@ async function run() {
             res.send(result)
         })
 
+        //  get single donation request user for update
         app.get('/donation-request-byId/:id', async (req, res) => {
             const id = req.params.id
             const query = {
@@ -235,6 +323,7 @@ async function run() {
             res.send(result)
         })
 
+        // donate {user} update donation status
         app.patch('/donate/:id', async (req, res) => {
             const id = req.params.id
             const donorInfo = req.body
@@ -249,6 +338,7 @@ async function run() {
             res.send(result)
         })
 
+        // update donation request  role
         app.patch('/update-donation-request/:id', async (req, res) => {
             const id = req.params.id
             const newDonorInfo = req.body
@@ -262,8 +352,7 @@ async function run() {
             res.send(result)
         })
 
-
-
+        // update donation status all role
         app.patch('/done-cancel/:id', async (req, res) => {
             const id = req.params.id
             const status = req.query.status
@@ -278,7 +367,7 @@ async function run() {
 
         })
 
-
+        //  delete donation request
         app.delete('/delete-request/:id', async (req, res) => {
             const id = req.params.id
             const filter = { _id: new ObjectId(id) }
@@ -298,10 +387,16 @@ async function run() {
 
 
 
+        // stats and analytics
+        app.get('/admin-stats', async (req, res) => {
+            const users = await userCollection.estimatedDocumentCount()
+            const requests = await donationRequestCollection.estimatedDocumentCount()
 
-
-
-
+            res.send({
+                users,
+                requests
+            })
+        })
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
