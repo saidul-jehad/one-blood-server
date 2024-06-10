@@ -121,6 +121,39 @@ async function run() {
             res.send(result)
         })
 
+        // get all blogs
+        app.get('/all-blogs', async (req, res) => {
+            const status = req.query.status
+            // console.log("key", status);
+            if (status !== "all") {
+
+                console.log(status);
+                const query = { status: status }
+                const result = await blogCollection.find(query).toArray()
+                return res.send(result)
+            }
+
+            const result = await blogCollection.find().toArray()
+            res.send(result)
+        })
+
+        // get published blog
+        app.get('/blogs', async (req, res) => {
+            const query = { status: "published" }
+            const result = await blogCollection.find(query).toArray()
+            res.send(result)
+        })
+
+        // get blog details
+        app.get('/blogs/:id', async (req, res) => {
+            const id = req.params.id
+            const query = {
+                _id: new ObjectId(id)
+            }
+            const result = await blogCollection.findOne(query)
+            res.send(result)
+        })
+
         // create blog
         app.post('/add-blog', async (req, res) => {
             const blog = req.body
@@ -139,21 +172,7 @@ async function run() {
         })
 
 
-        // get all blogs
-        app.get('/all-blogs', async (req, res) => {
-            const status = req.query.status
-            // console.log("key", status);
-            if (status !== "all") {
 
-                console.log(status);
-                const query = { status: status }
-                const result = await blogCollection.find(query).toArray()
-                return res.send(result)
-            }
-
-            const result = await blogCollection.find().toArray()
-            res.send(result)
-        })
 
         // user Collection
 
@@ -237,6 +256,42 @@ async function run() {
                 volunteer = user?.role === 'volunteer'
             }
             res.send({ volunteer })
+        })
+
+        // get user
+        app.get('/user/:email', async (req, res) => {
+            const email = req.params.email
+            console.log(email);
+            const query = { email: email }
+            const result = await userCollection.findOne(query)
+            res.send(result)
+        })
+
+        // update user
+        app.patch('/update-user/:id', async (req, res) => {
+            const id = req.params.id
+            const updatedUser = req.body
+            const query = { _id: new ObjectId(id) }
+            const updateDoc = {
+                $set: {
+                    ...updatedUser
+                },
+            };
+            const result = await userCollection.updateOne(query, updateDoc)
+            res.send(result)
+        })
+
+        // search user
+        app.get('/search-user/:bloodGroup', async (req, res) => {
+            const bloodGroup = req.params.bloodGroup
+            const search = req.query
+            const query = {
+                bloodGroup: bloodGroup,
+                district: search.district,
+                upazila: search.upazila
+            }
+            const result = await userCollection.find(query).toArray()
+            res.send(result)
         })
 
         // create user public
